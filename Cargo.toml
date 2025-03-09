@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4.40"
 iced = "0.13.1"

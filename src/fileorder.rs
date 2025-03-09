@@ -1,19 +1,69 @@
 use std::{
     ffi::{OsStr, OsString},
-    fs::{self, FileType, Metadata, ReadDir},
+    fs::{self, DirEntry, FileType, Metadata, ReadDir},
     io::Result,
 };
 
+use chrono::{DateTime, Local};
 use iced::Element;
 
 use crate::layouts;
+
+#[derive(Debug, Clone)]
+pub struct FileMetadata {
+    created: Option<DateTime<Local>>,
+    modified: Option<DateTime<Local>>,
+    accessed: Option<DateTime<Local>>,
+    permissions: bool,
+}
+
+pub struct FormattedDates {
+    pub created: String,
+    pub modified: String,
+    pub accessed: String,
+}
+
+impl FileMetadata {
+    pub fn get_created(&self) -> Option<DateTime<Local>> {
+        self.created
+    }
+
+    pub fn get_modified(&self) -> Option<DateTime<Local>> {
+        self.modified
+    }
+
+    pub fn get_accessed(&self) -> Option<DateTime<Local>> {
+        self.accessed
+    }
+
+    pub fn get_permissions(&self) -> bool {
+        self.permissions
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct File {
+    name: OsString,
+    metadata: FileMetadata,
+}
+
+impl File {
+    pub fn get_name(&self) -> &OsStr {
+        &self.name.as_os_str()
+    }
+
+    pub fn get_metadata(&self) -> &FileMetadata {
+        &self.metadata
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Directory {
     id: usize,
     name: OsString,
     directories: Vec<Directory>,
-    files: Vec<OsString>,
+    files: Vec<File>,
+    metadata: FileMetadata,
 }
 
 impl Directory {
@@ -24,11 +74,15 @@ impl Directory {
     }
 
     fn read_directories(&mut self, path: &OsStr, mut index: usize) -> usize {
-        let read_result = fs::read_dir(path);
+        println!("read_directories_called: {index}");
+        let read_result = fs::read_dir(path).map_err(|error| {
+            eprintln!("Error ocurred: {}", error);
+        });
+
         match read_result {
             Ok(entries) => {
                 let mut directories: Vec<Directory> = Vec::new();
-                let mut files: Vec<OsString> = Vec::new();
+                let mut files: Vec<File> = Vec::new();
                 self.read_entries(entries, &mut directories, &mut files, &mut index);
 
                 // Copy files
@@ -45,12 +99,45 @@ impl Directory {
                     self.directories.push(directory);
                 }
             }
-            Err(error) => {
-                eprintln!("Error occured while reading entries: {}", error);
-                std::process::exit(1);
-            }
+            _ => {}
         }
         index
+    }
+
+    fn read_entries(
+        &self,
+        entries: ReadDir,
+        directories: &mut Vec<Directory>,
+        files: &mut Vec<File>,
+        index: &mut usize,
+    ) {
+        let list_of_files: Vec<_> = self.get_entries(entries);
+        for file in list_of_files {
+            match file {
+                Ok(file) => {
+                    if file.file_type.is_dir() {
+                        directories.push(Directory {
+                            id: *index,
+                            name: file.file_name,
+                            directories: Vec::new(),
+                            files: Vec::new(),
+                            metadata: self.read_metadata_from_file(&file.metadata),
+                        });
+                        *index += 1;
+                    } else if file.file_type.is_file() {
+                        // File logic
+                        files.push(File {
+                            name: file.file_name,
+                            metadata: self.read_metadata_from_file(&file.metadata),
+                        });
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Error occured when reading parsed files: {}", error);
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 
     fn get_entries(&self, entries: ReadDir) -> Vec<Result<ParsedFile>> {
@@ -76,35 +163,29 @@ impl Directory {
             .collect()
     }
 
-    fn read_entries(
-        &self,
-        entries: ReadDir,
-        directories: &mut Vec<Directory>,
-        files: &mut Vec<OsString>,
-        index: &mut usize,
-    ) {
-        let list_of_files: Vec<_> = self.get_entries(entries);
-        for file in list_of_files {
-            match file {
-                Ok(file) => {
-                    if file.file_type.is_dir() {
-                        directories.push(Directory {
-                            id: *index,
-                            name: file.file_name,
-                            directories: Vec::new(),
-                            files: Vec::new(),
-                        });
-                        *index += 1;
-                    } else if file.file_type.is_file() {
-                        files.push(file.file_name);
-                    }
-                }
-                Err(error) => {
-                    eprintln!("Error occured when reading parsed files: {}", error);
-                    std::process::exit(1);
-                }
-            }
+    fn read_metadata_from_file(&self, metadata: &Metadata) -> FileMetadata {
+        let mut file_metadata = FileMetadata {
+            created: None,
+            modified: None,
+            accessed: None,
+            permissions: true,
+        };
+        if let Ok(created) = metadata.created() {
+            file_metadata.created = Some(created.into());
         }
+        if let Ok(modified) = metadata.modified() {
+            file_metadata.modified = Some(modified.into());
+        }
+
+        if let Ok(accessed) = metadata.accessed() {
+            file_metadata.accessed = Some(accessed.into());
+        }
+
+        if metadata.permissions().readonly() {
+            file_metadata.permissions = false;
+        }
+
+        file_metadata
     }
 
     fn get_updated_path(&self, path: &OsStr, new_directory_name: &OsStr) -> OsString {
@@ -128,8 +209,11 @@ impl Directory {
         &self.directories
     }
 
-    pub fn get_files(&self) -> &Vec<OsString> {
+    pub fn get_files(&self) -> &Vec<File> {
         &self.files
+    }
+    pub fn get_metadata(&self) -> &FileMetadata {
+        &self.metadata
     }
 }
 
@@ -156,6 +240,12 @@ impl Default for App {
                 name: OsString::new(),
                 directories: Vec::new(),
                 files: Vec::new(),
+                metadata: FileMetadata {
+                    created: None,
+                    modified: None,
+                    accessed: None,
+                    permissions: true,
+                },
             },
             layout: layouts::Layout::Home,
         }
@@ -186,10 +276,8 @@ impl App {
             }
             Message::TemplateLayout => {
                 self.root.clear_directories();
-                self.root.read_directories(
-                    OsString::from("/Users/vernerikankaanpaa/Maze").as_os_str(),
-                    1,
-                );
+                self.root
+                    .read_directories(OsString::from("/Users/vernerikankaanpaa").as_os_str(), 1);
                 self.layout = layouts::Layout::Templates
             }
             Message::In(directory_index) => {

@@ -1,10 +1,12 @@
+use chrono::{DateTime, Datelike, Local, Timelike};
+
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{button, column, container, row, scrollable, text, Column, Container},
     Element, Theme,
 };
 
-use crate::fileorder::{App, Directory, Message};
+use crate::fileorder::{App, Directory, FileMetadata, FormattedDates, Message};
 
 #[derive(Debug)]
 pub enum Layout {
@@ -60,19 +62,46 @@ fn get_directory_buttons(app: &App) -> Container<Message> {
     column = column
         .push(button(text("..").center().size(15)).on_press(Message::Out))
         .spacing(5);
+    column = column.push(
+        row![
+            text("Name").size(15).width(iced::FillPortion(1)),
+            text("Created").size(15).width(iced::FillPortion(1)),
+            text("Modified").size(15).width(iced::FillPortion(1)),
+            text("Accessed").size(15).width(iced::FillPortion(1)),
+        ]
+        .padding(5)
+        .spacing(5),
+    );
 
     // Display directories
     for dir in root.get_directories() {
         let dir_name = dir.get_name().to_str();
+        let directory_metadata = dir.get_metadata();
+        let formatted_dates = get_formatted_metadata(directory_metadata);
         if let Some(name) = dir_name {
             column = column.push(
-                button(
+                button(row![
                     text(name)
                         .center()
                         .size(15)
                         .align_x(Horizontal::Left)
-                        .width(iced::Fill),
-                )
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.created)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.modified)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.accessed)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                ])
                 .on_press(Message::In(dir.get_directory_id())),
             );
         }
@@ -80,9 +109,34 @@ fn get_directory_buttons(app: &App) -> Container<Message> {
 
     // Display files
     for file in root.get_files() {
-        let file_name = file.to_str();
-        if let Some(name) = file_name {
-            column = column.push(text(name).size(15).width(iced::Fill));
+        let file_name = file.get_name();
+        let file_metadata = file.get_metadata();
+
+        let formatted_dates = get_formatted_metadata(file_metadata);
+
+        if let Some(name) = file_name.to_str() {
+            column = column.push(
+                row![
+                    text(name).size(15).width(iced::FillPortion(1)),
+                    text(formatted_dates.created)
+                        .center()
+                        .align_x(Horizontal::Left)
+                        .size(15)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.modified)
+                        .center()
+                        .align_x(Horizontal::Left)
+                        .size(15)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.accessed)
+                        .center()
+                        .align_x(Horizontal::Left)
+                        .size(15)
+                        .width(iced::FillPortion(1))
+                ]
+                .spacing(5)
+                .padding(5),
+            );
         }
     }
     let container = Container::new(column);
@@ -102,4 +156,39 @@ fn find_current_directory<'a>(
         }
     }
     root
+}
+
+fn format_datetime(datetime: DateTime<Local>) -> String {
+    format!(
+        "{}-{}-{} {}:{}:{}",
+        datetime.year(),
+        datetime.month(),
+        datetime.day(),
+        datetime.hour(),
+        datetime.minute(),
+        datetime.second()
+    )
+}
+
+fn get_formatted_metadata(metadata: &FileMetadata) -> FormattedDates {
+    let mut formatted_creation_date = String::from("No creation date");
+    let mut formatted_modified_date = String::from("No modified date");
+    let mut formatted_accessed_date = String::from("No accessed date");
+    if let Some(created) = metadata.get_created() {
+        formatted_creation_date = format_datetime(created);
+    }
+
+    if let Some(modified) = metadata.get_modified() {
+        formatted_modified_date = format_datetime(modified);
+    }
+
+    if let Some(accessed) = metadata.get_accessed() {
+        formatted_accessed_date = format_datetime(accessed);
+    }
+    let formatted_dates = FormattedDates {
+        created: formatted_creation_date,
+        modified: formatted_modified_date,
+        accessed: formatted_accessed_date,
+    };
+    formatted_dates
 }
