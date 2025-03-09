@@ -1,6 +1,6 @@
 use std::{
     ffi::{OsStr, OsString},
-    fs::{self, FileType, ReadDir},
+    fs::{self, FileType, Metadata, ReadDir},
     io::Result,
 };
 
@@ -27,34 +27,16 @@ impl Directory {
         let read_result = fs::read_dir(path);
         match read_result {
             Ok(entries) => {
-                let list_of_files: Vec<_> = self.read_entries(entries);
                 let mut directories: Vec<Directory> = Vec::new();
                 let mut files: Vec<OsString> = Vec::new();
-                for file in list_of_files {
-                    match file {
-                        Ok(file) => {
-                            if file.file_type.is_dir() {
-                                directories.push(Directory {
-                                    id: index,
-                                    name: file.file_name,
-                                    directories: Vec::new(),
-                                    files: Vec::new(),
-                                });
-                                index += 1;
-                            } else if file.file_type.is_file() {
-                                files.push(file.file_name);
-                            }
-                        }
-                        Err(error) => {
-                            eprintln!("Error occured when reading parsed files: {}", error);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                // After files have been parsed
+                self.read_entries(entries, &mut directories, &mut files, &mut index);
+
+                // Copy files
                 for file in files {
                     self.files.push(file);
                 }
+
+                // Copy directories
                 for mut directory in directories {
                     index = directory.read_directories(
                         &self.get_updated_path(path, directory.name.as_os_str()),
@@ -71,10 +53,14 @@ impl Directory {
         index
     }
 
-    fn read_entries(&self, entries: ReadDir) -> Vec<Result<ParsedFile>> {
+    fn get_entries(&self, entries: ReadDir) -> Vec<Result<ParsedFile>> {
         entries
             .map(|entry| {
                 entry.map(|result| {
+                    let metadata = result.metadata().unwrap_or_else(|error| {
+                        eprintln!("Error occured when getting metadata: {}", error);
+                        std::process::exit(1);
+                    });
                     let file_type = result.file_type().unwrap_or_else(|error| {
                         eprintln!("Error occured when getting filetype: {}", error);
                         std::process::exit(1);
@@ -83,10 +69,42 @@ impl Directory {
                     ParsedFile {
                         file_type,
                         file_name,
+                        metadata,
                     }
                 })
             })
             .collect()
+    }
+
+    fn read_entries(
+        &self,
+        entries: ReadDir,
+        directories: &mut Vec<Directory>,
+        files: &mut Vec<OsString>,
+        index: &mut usize,
+    ) {
+        let list_of_files: Vec<_> = self.get_entries(entries);
+        for file in list_of_files {
+            match file {
+                Ok(file) => {
+                    if file.file_type.is_dir() {
+                        directories.push(Directory {
+                            id: *index,
+                            name: file.file_name,
+                            directories: Vec::new(),
+                            files: Vec::new(),
+                        });
+                        *index += 1;
+                    } else if file.file_type.is_file() {
+                        files.push(file.file_name);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Error occured when reading parsed files: {}", error);
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 
     fn get_updated_path(&self, path: &OsStr, new_directory_name: &OsStr) -> OsString {
@@ -126,6 +144,7 @@ pub struct App {
 struct ParsedFile {
     file_type: FileType,
     file_name: OsString,
+    metadata: Metadata,
 }
 
 impl Default for App {
