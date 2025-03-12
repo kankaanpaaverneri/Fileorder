@@ -1,13 +1,16 @@
 use std::{
     ffi::{OsStr, OsString},
-    fs::{self, DirEntry, FileType, Metadata, ReadDir},
+    fs::{self, FileType, Metadata, ReadDir},
     io::Result,
 };
 
 use chrono::{DateTime, Local};
 use iced::Element;
 
-use crate::layouts;
+use crate::{
+    layouts,
+    util::{self},
+};
 
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
@@ -34,10 +37,6 @@ impl FileMetadata {
 
     pub fn get_accessed(&self) -> Option<DateTime<Local>> {
         self.accessed
-    }
-
-    pub fn get_permissions(&self) -> bool {
-        self.permissions
     }
 }
 
@@ -66,42 +65,66 @@ pub struct Directory {
     metadata: FileMetadata,
 }
 
+impl Drop for Directory {
+    fn drop(&mut self) {}
+}
+
 impl Directory {
+    pub fn new() -> Self {
+        Self {
+            id: 0,
+            name: OsString::new(),
+            directories: Vec::new(),
+            files: Vec::new(),
+            metadata: FileMetadata {
+                created: None,
+                modified: None,
+                accessed: None,
+                permissions: true,
+            },
+        }
+    }
     pub fn clear_directories(&mut self) {
         self.directories.clear();
         self.files.clear();
         self.name.clear();
     }
 
-    fn read_directories(&mut self, path: &OsStr, mut index: usize) -> usize {
-        println!("read_directories_called: {index}");
-        let read_result = fs::read_dir(path).map_err(|error| {
-            eprintln!("Error ocurred: {}", error);
-        });
+    fn write_directory_content(&mut self, original_path: &OsStr, index: &mut usize) {
+        let current_dir = self;
+        let path = OsString::from(original_path);
+        current_dir.insert_files_and_directories(path.as_os_str(), index);
+    }
 
-        match read_result {
+    fn insert_files_and_directories(&mut self, path: &OsStr, index: &mut usize) {
+        match fs::read_dir(path).map_err(|error| {
+            eprintln!("Error occured when reading directories: {}", error);
+        }) {
             Ok(entries) => {
                 let mut directories: Vec<Directory> = Vec::new();
                 let mut files: Vec<File> = Vec::new();
-                self.read_entries(entries, &mut directories, &mut files, &mut index);
 
-                // Copy files
-                for file in files {
-                    self.files.push(file);
-                }
-
-                // Copy directories
-                for mut directory in directories {
-                    index = directory.read_directories(
-                        &self.get_updated_path(path, directory.name.as_os_str()),
-                        index,
-                    );
-                    self.directories.push(directory);
-                }
+                // Insert directories and files to current_dir
+                self.read_entries(entries, &mut directories, &mut files, index);
+                self.insert_files(files);
+                self.insert_directories(directories);
             }
             _ => {}
         }
-        index
+    }
+
+    fn insert_directories(&mut self, directories: Vec<Directory>) {
+        self.directories.clear();
+        for directory in directories {
+            self.directories.push(directory);
+        }
+    }
+
+    fn insert_files(&mut self, files: Vec<File>) {
+        self.files.clear();
+        for file in files {
+            self.files.push(file);
+        }
     }
 
     fn read_entries(
@@ -188,15 +211,6 @@ impl Directory {
         file_metadata
     }
 
-    fn get_updated_path(&self, path: &OsStr, new_directory_name: &OsStr) -> OsString {
-        let mut updated_path = OsString::from(path);
-        if path != "/" {
-            updated_path.push("/");
-        }
-        updated_path.push(new_directory_name);
-        updated_path
-    }
-
     pub fn get_directory_id(&self) -> usize {
         self.id
     }
@@ -222,6 +236,8 @@ pub struct App {
     position: Vec<usize>,
     root: Directory,
     layout: layouts::Layout,
+    current_path: OsString,
+    directories_read: usize,
 }
 
 #[derive(Debug)]
@@ -248,6 +264,8 @@ impl Default for App {
                 },
             },
             layout: layouts::Layout::Home,
+            current_path: OsString::from("/Users/vernerikankaanpaa"),
+            directories_read: 0,
         }
     }
 }
@@ -276,15 +294,51 @@ impl App {
             }
             Message::TemplateLayout => {
                 self.root.clear_directories();
-                self.root
-                    .read_directories(OsString::from("/Users/vernerikankaanpaa").as_os_str(), 1);
+                let mut root = Directory::new();
+                let mut index = 0;
+                root.write_directory_content(self.current_path.as_os_str(), &mut index);
+                self.directories_read = index;
+
+                self.root = root;
                 self.layout = layouts::Layout::Templates
             }
-            Message::In(directory_index) => {
-                self.position.push(directory_index);
+            Message::In(selected_directory_id) => {
+                self.position.push(selected_directory_id);
+                let mut i = 0;
+                let mut current_dir = &mut self.root;
+                while i < self.position.len() {
+                    let mut directory_found = false;
+                    let result =
+                        util::find_directory_index_by_id(&mut current_dir, selected_directory_id);
+                    if let Some(index) = result {
+                        directory_found = true;
+                        self.current_path.push("/");
+                        self.current_path
+                            .push(current_dir.directories[index].name.as_os_str());
+                        current_dir.directories[index].write_directory_content(
+                            &self.current_path.as_os_str(),
+                            &mut self.directories_read,
+                        );
+                    }
+
+                    if !directory_found {
+                        let result: Option<usize> =
+                            util::find_directory_index_by_id(current_dir, self.position[i]);
+
+                        if let Some(selected) = result {
+                            current_dir = &mut current_dir.directories[selected];
+                        }
+                        i += 1;
+                        continue;
+                    }
+                    break;
+                }
             }
             Message::Out => {
-                self.position.pop();
+                if let Some(_) = self.position.pop() {
+                    self.current_path =
+                        util::remove_directory_from_path(&self.current_path.as_os_str());
+                }
             }
         }
     }
