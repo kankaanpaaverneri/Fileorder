@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 
-use crate::fileorder::Directory;
+use crate::directory::Directory;
 
 pub fn remove_directory_from_path(path: &OsStr) -> OsString {
     if let Some(str_path) = path.to_str() {

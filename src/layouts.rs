@@ -6,7 +6,15 @@ use iced::{
     Element, Theme,
 };
 
-use crate::fileorder::{App, Directory, FileMetadata, FormattedDates, Message};
+use crate::directory::Directory;
+use crate::file::FileMetadata;
+use crate::fileorder::{App, Message};
+
+pub struct FormattedDates {
+    pub created: String,
+    pub modified: String,
+    pub accessed: String,
+}
 
 #[derive(Debug)]
 pub enum Layout {
@@ -55,7 +63,7 @@ pub fn templates_layout<'a>(app: &'a App) -> Element<'a, Message> {
 fn get_directory_buttons(app: &App) -> Container<Message> {
     let mut column = Column::new();
     let mut root = app.get_root();
-    let mut position = app.get_position().iter();
+    let mut position = app.get_id_stack().iter();
 
     // Select current directory to display
     root = find_current_directory(&mut position, root);
@@ -147,11 +155,11 @@ fn find_current_directory<'a>(
     position: &mut impl Iterator<Item = &'a usize>,
     mut root: &'a Directory,
 ) -> &'a Directory {
-    if let Some(id) = position.next() {
+    while let Some(id) = position.next() {
         for directory in root.get_directories() {
             if *id == directory.get_directory_id() {
                 root = directory;
-                root = find_current_directory(position, root);
+                break;
             }
         }
     }

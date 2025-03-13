@@ -1,3 +1,5 @@
+mod directory;
+mod file;
 mod fileorder;
 mod layouts;
 mod util;
