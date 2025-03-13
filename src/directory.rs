@@ -1,4 +1,5 @@
 use crate::file::{File, FileMetadata};
+use crate::util;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, FileType, Metadata, ReadDir};
 
@@ -30,6 +31,7 @@ impl Directory {
     }
     pub fn clear_directories(&mut self) {
         self.directories.clear();
+        self.directories.clear();
         self.files.clear();
         self.name.clear();
     }
@@ -38,6 +40,73 @@ impl Directory {
         let current_dir = self;
         let path = OsString::from(original_path);
         current_dir.insert_files_and_directories(path.as_os_str(), index);
+    }
+
+    pub fn find_directory_by_id(&mut self, id_stack: &Vec<usize>) -> &mut Directory {
+        let mut current_dir = self;
+        let mut iter = id_stack.iter();
+
+        while let Some(iterator) = iter.next() {
+            let index = util::find_directory_index_by_id(current_dir, *iterator);
+            if let Some(i) = index {
+                current_dir = &mut current_dir.get_mut_directories()[i];
+            }
+            if let None = index {
+                break;
+            }
+        }
+
+        current_dir
+    }
+
+    pub fn insert_new_sub_directory(
+        &mut self,
+        id_stack: &Vec<usize>,
+        current_path: &mut OsString,
+        directories_read: &mut usize,
+        selected_directory_id: usize,
+    ) {
+        let mut current_dir = self;
+        for i in 0..id_stack.len() {
+            let result = util::find_directory_index_by_id(&mut current_dir, selected_directory_id);
+            if let Some(index) = result {
+                current_path.push("/");
+                current_path.push(current_dir.get_directories()[index].get_name());
+
+                current_dir.get_mut_directories()[index]
+                    .write_directory_content(current_path.as_os_str(), directories_read);
+                break;
+            }
+
+            let result: Option<usize> = util::find_directory_index_by_id(current_dir, id_stack[i]);
+
+            if let Some(selected) = result {
+                current_dir = &mut current_dir.get_mut_directories()[selected];
+            }
+        }
+    }
+
+    pub fn get_directory_id(&self) -> usize {
+        self.id
+    }
+
+    pub fn get_name(&self) -> &OsStr {
+        self.name.as_os_str()
+    }
+
+    pub fn get_directories(&self) -> &Vec<Self> {
+        &self.directories
+    }
+
+    pub fn get_mut_directories(&mut self) -> &mut Vec<Self> {
+        &mut self.directories
+    }
+
+    pub fn get_files(&self) -> &Vec<File> {
+        &self.files
+    }
+    pub fn get_metadata(&self) -> &FileMetadata {
+        &self.metadata
     }
 
     fn insert_files_and_directories(&mut self, path: &OsStr, index: &mut usize) {
@@ -147,28 +216,5 @@ impl Directory {
         }
 
         file_metadata
-    }
-
-    pub fn get_directory_id(&self) -> usize {
-        self.id
-    }
-
-    pub fn get_name(&self) -> &OsStr {
-        self.name.as_os_str()
-    }
-
-    pub fn get_directories(&self) -> &Vec<Self> {
-        &self.directories
-    }
-
-    pub fn get_mut_directories(&mut self) -> &mut Vec<Self> {
-        &mut self.directories
-    }
-
-    pub fn get_files(&self) -> &Vec<File> {
-        &self.files
-    }
-    pub fn get_metadata(&self) -> &FileMetadata {
-        &self.metadata
     }
 }
