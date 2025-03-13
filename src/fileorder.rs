@@ -5,9 +5,9 @@ use crate::{directory::Directory, layouts, util};
 
 #[derive(Debug)]
 pub struct App {
-    id_stack: Vec<usize>,
     root: Directory,
     layout: layouts::Layout,
+    id_stack: Vec<usize>,
     current_path: OsString,
     directories_read: usize,
 }
@@ -15,9 +15,9 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
-            id_stack: Vec::new(),
             root: Directory::new(),
             layout: layouts::Layout::Home,
+            id_stack: Vec::new(),
             current_path: OsString::from("/Users/vernerikankaanpaa"),
             directories_read: 0,
         }
@@ -66,11 +66,12 @@ impl App {
             Message::Out => {
                 if let Some(_) = self.id_stack.last() {
                     let directory = self.root.find_directory_by_id(&self.id_stack);
+                    let directory_ids = directory.get_directory_ids();
+                    self.directories_read -= directory_ids.len();
                     directory.get_mut_directories().clear();
                     self.current_path =
                         util::remove_directory_from_path(&self.current_path.as_os_str());
                     self.id_stack.pop();
-                    println!("Directories read: {}", self.directories_read);
                 }
             }
         }

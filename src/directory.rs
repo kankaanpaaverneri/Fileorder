@@ -31,7 +31,6 @@ impl Directory {
     }
     pub fn clear_directories(&mut self) {
         self.directories.clear();
-        self.directories.clear();
         self.files.clear();
         self.name.clear();
     }
@@ -88,6 +87,14 @@ impl Directory {
 
     pub fn get_directory_id(&self) -> usize {
         self.id
+    }
+
+    pub fn get_directory_ids(&self) -> Vec<usize> {
+        let mut dir_ids: Vec<usize> = Vec::new();
+        for i in 0..self.directories.len() {
+            dir_ids.push(self.directories[i].id);
+        }
+        dir_ids
     }
 
     pub fn get_name(&self) -> &OsStr {
