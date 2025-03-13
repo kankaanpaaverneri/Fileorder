@@ -70,83 +70,12 @@ fn get_directory_buttons(app: &App) -> Container<Message> {
     column = column
         .push(button(text("..").center().size(15)).on_press(Message::Out))
         .spacing(5);
-    column = column.push(
-        row![
-            text("Name").size(15).width(iced::FillPortion(1)),
-            text("Created").size(15).width(iced::FillPortion(1)),
-            text("Modified").size(15).width(iced::FillPortion(1)),
-            text("Accessed").size(15).width(iced::FillPortion(1)),
-        ]
-        .padding(5)
-        .spacing(5),
-    );
 
-    // Display directories
-    for dir in root.get_directories() {
-        let dir_name = dir.get_name().to_str();
-        let directory_metadata = dir.get_metadata();
-        let formatted_dates = get_formatted_metadata(directory_metadata);
-        if let Some(name) = dir_name {
-            column = column.push(
-                button(row![
-                    text(name)
-                        .center()
-                        .size(15)
-                        .align_x(Horizontal::Left)
-                        .width(iced::FillPortion(1)),
-                    text(formatted_dates.created)
-                        .center()
-                        .size(15)
-                        .align_x(Horizontal::Left)
-                        .width(iced::FillPortion(1)),
-                    text(formatted_dates.modified)
-                        .center()
-                        .size(15)
-                        .align_x(Horizontal::Left)
-                        .width(iced::FillPortion(1)),
-                    text(formatted_dates.accessed)
-                        .center()
-                        .size(15)
-                        .align_x(Horizontal::Left)
-                        .width(iced::FillPortion(1)),
-                ])
-                .on_press(Message::In(dir.get_directory_id())),
-            );
-        }
-    }
+    column = display_head(column);
 
-    // Display files
-    for file in root.get_files() {
-        let file_name = file.get_name();
-        let file_metadata = file.get_metadata();
+    column = display_directories(column, root);
+    column = display_files(column, root);
 
-        let formatted_dates = get_formatted_metadata(file_metadata);
-
-        if let Some(name) = file_name.to_str() {
-            column = column.push(
-                row![
-                    text(name).size(15).width(iced::FillPortion(1)),
-                    text(formatted_dates.created)
-                        .center()
-                        .align_x(Horizontal::Left)
-                        .size(15)
-                        .width(iced::FillPortion(1)),
-                    text(formatted_dates.modified)
-                        .center()
-                        .align_x(Horizontal::Left)
-                        .size(15)
-                        .width(iced::FillPortion(1)),
-                    text(formatted_dates.accessed)
-                        .center()
-                        .align_x(Horizontal::Left)
-                        .size(15)
-                        .width(iced::FillPortion(1))
-                ]
-                .spacing(5)
-                .padding(5),
-            );
-        }
-    }
     let container = Container::new(column);
     container
 }
@@ -199,4 +128,92 @@ fn get_formatted_metadata(metadata: &FileMetadata) -> FormattedDates {
         accessed: formatted_accessed_date,
     };
     formatted_dates
+}
+
+fn display_head<'a>(mut column: Column<'a, Message>) -> Column<'a, Message> {
+    column = column.push(
+        row![
+            text("Name").size(15).width(iced::FillPortion(1)),
+            text("Created").size(15).width(iced::FillPortion(1)),
+            text("Modified").size(15).width(iced::FillPortion(1)),
+            text("Accessed").size(15).width(iced::FillPortion(1)),
+        ]
+        .padding(5)
+        .spacing(5),
+    );
+    column
+}
+
+fn display_directories<'a>(
+    mut column: Column<'a, Message>,
+    root: &'a Directory,
+) -> Column<'a, Message> {
+    for dir in root.get_directories() {
+        let dir_name = dir.get_name().to_str();
+        let directory_metadata = dir.get_metadata();
+        let formatted_dates = get_formatted_metadata(directory_metadata);
+        if let Some(name) = dir_name {
+            column = column.push(
+                button(row![
+                    text(name)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.created)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.modified)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.accessed)
+                        .center()
+                        .size(15)
+                        .align_x(Horizontal::Left)
+                        .width(iced::FillPortion(1)),
+                ])
+                .on_press(Message::In(dir.get_directory_id())),
+            );
+        }
+    }
+    column
+}
+
+fn display_files<'a>(mut column: Column<'a, Message>, root: &'a Directory) -> Column<'a, Message> {
+    for file in root.get_files() {
+        let file_name = file.get_name();
+        let file_metadata = file.get_metadata();
+
+        let formatted_dates = get_formatted_metadata(file_metadata);
+
+        if let Some(name) = file_name.to_str() {
+            column = column.push(
+                row![
+                    text(name).size(15).width(iced::FillPortion(1)),
+                    text(formatted_dates.created)
+                        .center()
+                        .align_x(Horizontal::Left)
+                        .size(15)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.modified)
+                        .center()
+                        .align_x(Horizontal::Left)
+                        .size(15)
+                        .width(iced::FillPortion(1)),
+                    text(formatted_dates.accessed)
+                        .center()
+                        .align_x(Horizontal::Left)
+                        .size(15)
+                        .width(iced::FillPortion(1))
+                ]
+                .spacing(5)
+                .padding(5),
+            );
+        }
+    }
+    column
 }
