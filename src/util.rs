@@ -1,6 +1,9 @@
-use std::ffi::{OsStr, OsString};
+use std::{
+    ffi::{OsStr, OsString},
+    fs,
+};
 
-use crate::directory::Directory;
+use crate::{directory::Directory, fileorder::OperatingSystem};
 
 pub fn remove_directory_from_path(path: &OsStr) -> OsString {
     if let Some(str_path) = path.to_str() {
@@ -29,4 +32,37 @@ pub fn find_directory_index_by_id(
         }
     }
     index
+}
+
+pub fn get_external_storage_paths(operating_system: &OperatingSystem) -> Vec<OsString> {
+    let mut storage_paths: Vec<OsString> = Vec::new();
+    match operating_system {
+        OperatingSystem::MacOs => get_external_storage_devices_on_macos(&mut storage_paths),
+        OperatingSystem::Windows => {}
+        OperatingSystem::Linux => {}
+        OperatingSystem::None => {}
+    }
+    storage_paths
+}
+
+fn get_external_storage_devices_on_macos(storage_paths: &mut Vec<OsString>) {
+    let result = fs::read_dir("/Volumes").map_err(|error| {
+        eprintln!("Error when getting external storage devices: {}", error);
+    });
+    match result {
+        Ok(entries) => {
+            let results: Vec<_> = entries.map(|result| result.map(|r| r.path())).collect();
+            for result in results {
+                match result {
+                    Ok(path) => {
+                        storage_paths.push(OsString::from(path.as_os_str()));
+                    }
+                    Err(e) => {
+                        eprintln!("Error occured while reading paths: {}", e)
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
 }

@@ -5,11 +5,30 @@ use crate::{directory::Directory, layouts, util};
 
 #[derive(Debug)]
 pub struct App {
+    operating_system: OperatingSystem,
     root: Directory,
     layout: layouts::Layout,
     id_stack: Vec<usize>,
     current_path: OsString,
     directories_read: usize,
+    external_storage_paths: Vec<OsString>,
+}
+
+#[derive(Debug)]
+pub enum OperatingSystem {
+    MacOs,
+    Windows,
+    Linux,
+    None,
+}
+
+fn detect_operating_system() -> OperatingSystem {
+    match std::env::consts::OS {
+        "macos" => OperatingSystem::MacOs,
+        "windows" => OperatingSystem::Windows,
+        "linux" => OperatingSystem::Linux,
+        _ => OperatingSystem::None,
+    }
 }
 
 const ROOTPATH: &str = "";
@@ -17,11 +36,13 @@ const ROOTPATH: &str = "";
 impl Default for App {
     fn default() -> Self {
         Self {
+            operating_system: detect_operating_system(),
             root: Directory::new(),
             layout: layouts::Layout::Home,
             id_stack: Vec::new(),
             current_path: OsString::from(ROOTPATH),
             directories_read: 0,
+            external_storage_paths: Vec::new(),
         }
     }
 }
@@ -36,6 +57,9 @@ pub enum Message {
 
 impl App {
     pub fn view(&self) -> Element<Message> {
+        if let OperatingSystem::None = self.operating_system {
+            return layouts::error_layout(self, "Could not detect operating system");
+        }
         match self.layout {
             layouts::Layout::Home => layouts::home_layout(),
             layouts::Layout::Templates => layouts::templates_layout(self),
@@ -49,6 +73,9 @@ impl App {
                 self.id_stack = Vec::new();
             }
             Message::TemplateLayout => {
+                self.external_storage_paths =
+                    util::get_external_storage_paths(&self.operating_system);
+                println!("External_storage_paths: {:?}", self.external_storage_paths);
                 self.current_path = OsString::from(ROOTPATH);
                 self.root.clear_directories();
                 let mut index = 0;

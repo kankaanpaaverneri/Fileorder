@@ -35,6 +35,10 @@ pub fn home_layout<'a>() -> Element<'a, Message> {
     .into()
 }
 
+pub fn error_layout<'a>(_: &'a App, error_message: &'a str) -> Element<'a, Message> {
+    container(text(error_message)).center(iced::Fill).into()
+}
+
 pub fn templates_layout<'a>(app: &'a App) -> Element<'a, Message> {
     container(
         column![
