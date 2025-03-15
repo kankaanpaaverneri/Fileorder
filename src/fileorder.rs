@@ -12,13 +12,15 @@ pub struct App {
     directories_read: usize,
 }
 
+const ROOTPATH: &str = "/";
+
 impl Default for App {
     fn default() -> Self {
         Self {
             root: Directory::new(),
             layout: layouts::Layout::Home,
             id_stack: Vec::new(),
-            current_path: OsString::from("/Users/vernerikankaanpaa"),
+            current_path: OsString::from(ROOTPATH),
             directories_read: 0,
         }
     }
@@ -47,6 +49,7 @@ impl App {
                 self.id_stack = Vec::new();
             }
             Message::TemplateLayout => {
+                self.current_path = OsString::from(ROOTPATH);
                 self.root.clear_directories();
                 let mut index = 0;
                 self.root
@@ -69,6 +72,7 @@ impl App {
                     let directory_ids = directory.get_directory_ids();
                     self.directories_read -= directory_ids.len();
                     directory.get_mut_directories().clear();
+                    directory.get_mut_files().clear();
                     self.current_path =
                         util::remove_directory_from_path(&self.current_path.as_os_str());
                     self.id_stack.pop();

@@ -112,6 +112,11 @@ impl Directory {
     pub fn get_files(&self) -> &Vec<File> {
         &self.files
     }
+
+    pub fn get_mut_files(&mut self) -> &mut Vec<File> {
+        &mut self.files
+    }
+
     pub fn get_metadata(&self) -> &FileMetadata {
         &self.metadata
     }
