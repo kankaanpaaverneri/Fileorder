@@ -12,7 +12,7 @@ pub struct App {
     directories_read: usize,
 }
 
-const ROOTPATH: &str = "/";
+const ROOTPATH: &str = "";
 
 impl Default for App {
     fn default() -> Self {
@@ -52,10 +52,13 @@ impl App {
                 self.current_path = OsString::from(ROOTPATH);
                 self.root.clear_directories();
                 let mut index = 0;
+                let mut initial_path = OsString::new();
+                initial_path.push("/");
                 self.root
-                    .write_directory_content(self.current_path.as_os_str(), &mut index);
+                    .write_directory_content(initial_path.as_os_str(), &mut index);
                 self.directories_read = index;
-                self.layout = layouts::Layout::Templates
+                self.layout = layouts::Layout::Templates;
+                println!("Current path: {:?}", self.current_path.as_os_str());
             }
             Message::In(selected_directory_id) => {
                 self.id_stack.push(selected_directory_id);
@@ -65,6 +68,7 @@ impl App {
                     &mut self.directories_read,
                     selected_directory_id,
                 );
+                println!("Current path: {:?}", self.current_path.as_os_str());
             }
             Message::Out => {
                 if let Some(_) = self.id_stack.last() {
@@ -76,6 +80,7 @@ impl App {
                     self.current_path =
                         util::remove_directory_from_path(&self.current_path.as_os_str());
                     self.id_stack.pop();
+                    println!("Current path: {:?}", self.current_path.as_os_str());
                 }
             }
         }
