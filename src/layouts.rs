@@ -2,7 +2,7 @@ use chrono::{DateTime, Datelike, Local, Timelike};
 
 use iced::{
     alignment::{Horizontal, Vertical},
-    widget::{button, column, container, row, scrollable, text, Column, Container},
+    widget::{button, column, container, row, scrollable, text, Column, Row, Container},
     Element, Theme,
 };
 
@@ -47,11 +47,9 @@ pub fn templates_layout<'a>(app: &'a App) -> Element<'a, Message> {
             button("Home")
                 .on_press(Message::HomeLayout)
                 .style(|theme: &Theme, status| {
-                    // Do stuff
                     let palette = theme.extended_palette();
                     match status {
                         button::Status::Active => {
-                            // Do something
                             button::Style::default().with_background(palette.secondary.strong.color)
                         }
                         _ => button::primary(theme, status),
@@ -74,6 +72,7 @@ fn get_directory_buttons(app: &App) -> Container<Message> {
     column = column
         .push(button(text("..").center().size(15)).on_press(Message::Out))
         .spacing(5);
+    column = display_external_storage_devices(column, app);
 
     column = display_head(column);
 
@@ -146,6 +145,24 @@ fn display_head<'a>(mut column: Column<'a, Message>) -> Column<'a, Message> {
         .spacing(5),
     );
     column
+}
+
+fn display_external_storage_devices<'a>(mut column: Column<'a, Message>, app: &'a App) -> Column<'a, Message> {
+    column = column.push(
+        column![text("External storage devices"), get_external_storage_devices(app)]
+    );
+    column
+}
+
+fn get_external_storage_devices<'a>(app: &'a App) -> Row<'a, Message> {
+    let mut row = Row::new();
+
+    for path in app.get_external_storage_paths() {
+        if let Some(p) = path.to_str() {
+            row = row.push(button(p).on_press());
+        }
+    }
+    row
 }
 
 fn display_directories<'a>(

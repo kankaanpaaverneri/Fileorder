@@ -73,18 +73,28 @@ impl App {
                 self.id_stack = Vec::new();
             }
             Message::TemplateLayout => {
+
+                
+                self.root.clear_directories();
+                
                 self.external_storage_paths =
                     util::get_external_storage_paths(&self.operating_system);
-                println!("External_storage_paths: {:?}", self.external_storage_paths);
-                self.current_path = OsString::from(ROOTPATH);
-                self.root.clear_directories();
-                let mut index = 0;
+                
                 let mut initial_path = OsString::new();
-                initial_path.push("/");
+                util::set_initial_path(&mut initial_path, &self.operating_system, &self.external_storage_paths);
+
+                
+                if let Some(drive_letter) = util::get_drive_letter_from_path(initial_path.as_os_str()) {
+                    self.current_path = drive_letter;
+                }
+
+                let mut index = 0;
                 self.root
                     .write_directory_content(initial_path.as_os_str(), &mut index);
                 self.directories_read = index;
                 self.layout = layouts::Layout::Templates;
+                
+
                 println!("Current path: {:?}", self.current_path.as_os_str());
             }
             Message::In(selected_directory_id) => {
@@ -109,7 +119,7 @@ impl App {
                     self.id_stack.pop();
                     println!("Current path: {:?}", self.current_path.as_os_str());
                 }
-            }
+            },
         }
     }
 
@@ -119,5 +129,9 @@ impl App {
 
     pub fn get_id_stack(&self) -> &Vec<usize> {
         &self.id_stack
+    }
+
+    pub fn get_external_storage_paths(&self) -> &Vec<OsString> {
+        &self.external_storage_paths
     }
 }
