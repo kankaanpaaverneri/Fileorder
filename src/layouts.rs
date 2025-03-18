@@ -2,7 +2,7 @@ use chrono::{DateTime, Datelike, Local, Timelike};
 
 use iced::{
     alignment::{Horizontal, Vertical},
-    widget::{button, column, container, row, scrollable, text, Column, Container},
+    widget::{button, column, container, row, scrollable, text, Column, Container, Row},
     Element, Theme,
 };
 
@@ -74,6 +74,8 @@ fn get_directory_buttons(app: &App) -> Container<Message> {
     column = column
         .push(button(text("..").center().size(15)).on_press(Message::Out))
         .spacing(5);
+    let row = display_external_storage_devices(app);
+    column = column.push(row);
 
     column = display_head(column);
 
@@ -132,6 +134,17 @@ fn get_formatted_metadata(metadata: &FileMetadata) -> FormattedDates {
         accessed: formatted_accessed_date,
     };
     formatted_dates
+}
+
+fn display_external_storage_devices<'a>(app: &'a App) -> Row<'a, Message> {
+    let mut row = Row::new();
+    for storage_device in app.get_external_storage_devices() {
+        if let Some(name) = storage_device.get_name().to_str() {
+            row = row
+                .push(button(name).on_press(Message::InExternal(storage_device.get_directory_id())))
+        }
+    }
+    row
 }
 
 fn display_head<'a>(mut column: Column<'a, Message>) -> Column<'a, Message> {

@@ -1,7 +1,7 @@
 use iced::Element;
 use std::ffi::OsString;
 
-use crate::{directory::Directory, layouts, util};
+use crate::{directory::Directory, file::FileMetadata, layouts, util};
 
 #[derive(Debug)]
 pub struct App {
@@ -12,6 +12,7 @@ pub struct App {
     current_path: OsString,
     directories_read: usize,
     external_storage_paths: Vec<OsString>,
+    external_storage_directories: Vec<Directory>,
 }
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ impl Default for App {
             current_path: OsString::from(ROOTPATH),
             directories_read: 0,
             external_storage_paths: Vec::new(),
+            external_storage_directories: Vec::new(),
         }
     }
 }
@@ -53,6 +55,7 @@ pub enum Message {
     TemplateLayout,
     In(usize),
     Out,
+    InExternal(usize),
 }
 
 impl App {
@@ -73,11 +76,15 @@ impl App {
                 self.id_stack = Vec::new();
             }
             Message::TemplateLayout => {
+                self.external_storage_directories.clear();
                 self.external_storage_paths =
                     util::get_external_storage_paths(&self.operating_system);
-                println!("External_storage_paths: {:?}", self.external_storage_paths);
+                if let OperatingSystem::MacOs = self.operating_system {
+                    self.initialize_external_devices();
+                }
                 self.current_path = OsString::from(ROOTPATH);
                 self.root.clear_directories();
+
                 let mut index = 0;
                 let mut initial_path = OsString::new();
                 initial_path.push("/");
@@ -85,9 +92,9 @@ impl App {
                     .write_directory_content(initial_path.as_os_str(), &mut index);
                 self.directories_read = index;
                 self.layout = layouts::Layout::Templates;
-                println!("Current path: {:?}", self.current_path.as_os_str());
             }
             Message::In(selected_directory_id) => {
+                println!("current path prev: {:?}", self.current_path);
                 self.id_stack.push(selected_directory_id);
                 self.root.insert_new_sub_directory(
                     &mut self.id_stack,
@@ -95,7 +102,7 @@ impl App {
                     &mut self.directories_read,
                     selected_directory_id,
                 );
-                println!("Current path: {:?}", self.current_path.as_os_str());
+                println!("current path after: {:?}", self.current_path);
             }
             Message::Out => {
                 if let Some(_) = self.id_stack.last() {
@@ -110,6 +117,26 @@ impl App {
                     println!("Current path: {:?}", self.current_path.as_os_str());
                 }
             }
+            Message::InExternal(selected_directory_id) => {
+                for directory in &self.external_storage_directories {
+                    let mut path_to_external_dir = OsString::new();
+                    path_to_external_dir.push("/Volumes/");
+                    if directory.get_directory_id() == selected_directory_id {
+                        path_to_external_dir.push(directory.get_name());
+                        self.root.clear_directories();
+                        self.directories_read = 0;
+                        self.root.write_directory_content(
+                            path_to_external_dir.as_os_str(),
+                            &mut self.directories_read,
+                        );
+
+                        self.current_path = OsString::new();
+                        self.current_path.push("/Volumes/");
+                        self.current_path.push(directory.get_name());
+                        self.id_stack.clear();
+                    }
+                }
+            }
         }
     }
 
@@ -119,5 +146,32 @@ impl App {
 
     pub fn get_id_stack(&self) -> &Vec<usize> {
         &self.id_stack
+    }
+
+    pub fn get_external_storage_devices(&self) -> &Vec<Directory> {
+        &self.external_storage_directories
+    }
+
+    fn initialize_external_devices(&mut self) {
+        for (i, path) in self.external_storage_paths.iter().enumerate() {
+            if let Some(path_str) = path.to_str() {
+                let mut last = "";
+                for splitted in path_str.split("/") {
+                    last = splitted;
+                }
+                let mut directory_name = OsString::new();
+                directory_name.push(last);
+                let storage_device = Directory::build(
+                    i,
+                    directory_name.as_os_str(),
+                    Vec::new(),
+                    Vec::new(),
+                    FileMetadata::new(),
+                );
+                self.external_storage_directories.push(storage_device);
+            } else {
+                eprintln!("Failed to convert external storage path from &OsStr to &str");
+            }
+        }
     }
 }

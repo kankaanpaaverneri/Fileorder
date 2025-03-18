@@ -29,6 +29,23 @@ impl Directory {
             metadata: FileMetadata::new(),
         }
     }
+
+    pub fn build(
+        id: usize,
+        name: &OsStr,
+        directories: Vec<Directory>,
+        files: Vec<File>,
+        metadata: FileMetadata,
+    ) -> Self {
+        Self {
+            id,
+            name: OsString::from(name),
+            directories,
+            files,
+            metadata,
+        }
+    }
+
     pub fn clear_directories(&mut self) {
         self.directories.clear();
         self.files.clear();
@@ -161,51 +178,57 @@ impl Directory {
     ) {
         let list_of_files: Vec<_> = self.get_entries(entries);
         for file in list_of_files {
-            match file {
-                Ok(file) => {
-                    if file.file_type.is_dir() {
-                        directories.push(Directory {
-                            id: *index,
-                            name: file.file_name,
-                            directories: Vec::new(),
-                            files: Vec::new(),
-                            metadata: self.read_metadata_from_file(&file.metadata),
-                        });
-                        *index += 1;
-                    } else if file.file_type.is_file() {
-                        files.push(File::new_from(
-                            file.file_name.as_os_str(),
-                            self.read_metadata_from_file(&file.metadata),
-                        ));
-                    }
-                }
-                Err(error) => {
-                    eprintln!("Error occured when reading parsed files: {}", error);
-                    std::process::exit(1);
-                }
+            if file.file_type.is_dir() {
+                directories.push(Directory {
+                    id: *index,
+                    name: file.file_name,
+                    directories: Vec::new(),
+                    files: Vec::new(),
+                    metadata: self.read_metadata_from_file(&file.metadata),
+                });
+                *index += 1;
+            } else if file.file_type.is_file() {
+                files.push(File::new_from(
+                    file.file_name.as_os_str(),
+                    self.read_metadata_from_file(&file.metadata),
+                ));
             }
         }
     }
 
-    fn get_entries(&self, entries: ReadDir) -> Vec<std::io::Result<ParsedFile>> {
+    fn get_entries(&self, entries: ReadDir) -> Vec<ParsedFile> {
         entries
-            .map(|entry| {
-                entry.map(|result| {
-                    let metadata = result.metadata().unwrap_or_else(|error| {
-                        eprintln!("Error occured when getting metadata: {}", error);
-                        std::process::exit(1);
-                    });
-                    let file_type = result.file_type().unwrap_or_else(|error| {
-                        eprintln!("Error occured when getting filetype: {}", error);
-                        std::process::exit(1);
-                    });
-                    let file_name = result.file_name();
-                    ParsedFile {
-                        file_type,
-                        file_name,
-                        metadata,
+            .filter_map(|entry| match entry {
+                Ok(entry) => {
+                    let file_name = entry.file_name();
+                    let file_type = entry.file_type();
+                    let metadata = entry.metadata();
+
+                    if let Err(error) = metadata {
+                        eprintln!("Error reading metadata from entry: {}", error);
+                        return None;
                     }
-                })
+
+                    if let Err(error) = file_type {
+                        eprintln!("Error reading file_type from entry: {}", error);
+                        return None;
+                    }
+
+                    if let Ok(mt) = metadata {
+                        if let Ok(ft) = file_type {
+                            return Some(ParsedFile {
+                                file_name,
+                                file_type: ft,
+                                metadata: mt,
+                            });
+                        }
+                    }
+                    None
+                }
+                Err(error) => {
+                    eprintln!("Error occured when reading entries: {}", error);
+                    return None;
+                }
             })
             .collect()
     }
