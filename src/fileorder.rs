@@ -79,9 +79,8 @@ impl App {
                 self.external_storage_directories.clear();
                 self.external_storage_paths =
                     util::get_external_storage_paths(&self.operating_system);
-                if let OperatingSystem::MacOs = self.operating_system {
                     self.initialize_external_devices();
-                }
+                
                 self.current_path = OsString::from(ROOTPATH);
                 self.root.clear_directories();
 
@@ -112,29 +111,16 @@ impl App {
                     directory.get_mut_directories().clear();
                     directory.get_mut_files().clear();
                     self.current_path =
-                        util::remove_directory_from_path(&self.current_path.as_os_str());
+                        util::remove_directory_from_path(&self.current_path.as_os_str(), &self.operating_system);
                     self.id_stack.pop();
                     println!("Current path: {:?}", self.current_path.as_os_str());
                 }
             }
             Message::InExternal(selected_directory_id) => {
-                for directory in &self.external_storage_directories {
-                    let mut path_to_external_dir = OsString::new();
-                    path_to_external_dir.push("/Volumes/");
-                    if directory.get_directory_id() == selected_directory_id {
-                        path_to_external_dir.push(directory.get_name());
-                        self.root.clear_directories();
-                        self.directories_read = 0;
-                        self.root.write_directory_content(
-                            path_to_external_dir.as_os_str(),
-                            &mut self.directories_read,
-                        );
-
-                        self.current_path = OsString::new();
-                        self.current_path.push("/Volumes/");
-                        self.current_path.push(directory.get_name());
-                        self.id_stack.clear();
-                    }
+                match self.operating_system {
+                    OperatingSystem::MacOs => self.change_storage_device_on_mac(selected_directory_id),
+                    OperatingSystem::Windows => self.change_storage_device_on_windows(selected_directory_id),
+                    _ => {}
                 }
             }
         }
@@ -171,6 +157,43 @@ impl App {
                 self.external_storage_directories.push(storage_device);
             } else {
                 eprintln!("Failed to convert external storage path from &OsStr to &str");
+            }
+        }
+    }
+
+    fn change_storage_device_on_mac(&mut self, selected_directory_id: usize) {
+        for directory in &self.external_storage_directories {
+            let mut path_to_external_dir = OsString::new();
+            path_to_external_dir.push("/Volumes/");
+            if directory.get_directory_id() == selected_directory_id {
+                path_to_external_dir.push(directory.get_name());
+                self.root.clear_directories();
+                self.directories_read = 0;
+                self.root.write_directory_content(
+                    path_to_external_dir.as_os_str(),
+                    &mut self.directories_read,
+                );
+
+                self.current_path = OsString::new();
+                self.current_path.push("/Volumes/");
+                self.current_path.push(directory.get_name());
+                self.id_stack.clear();
+            }
+        }
+    }
+
+    fn change_storage_device_on_windows(&mut self, selected_directory_id: usize) {
+        for directory in &self.external_storage_directories {
+            let mut path_to_external_dir: OsString = OsString::new();
+            if directory.get_directory_id() == selected_directory_id {
+                path_to_external_dir.push(directory.get_name());
+                path_to_external_dir.push("/");
+                self.root.clear_directories();
+                self.directories_read = 0;
+                self.root.write_directory_content(path_to_external_dir.as_os_str(), &mut self.directories_read);
+                self.current_path = OsString::new();
+                self.current_path.push(directory.get_name());
+                self.id_stack.clear();
             }
         }
     }
