@@ -1,3 +1,5 @@
+use chrono::{DateTime, Local};
+
 use crate::file::{File, FileMetadata};
 use crate::util;
 use std::ffi::{OsStr, OsString};
@@ -52,10 +54,15 @@ impl Directory {
         self.name.clear();
     }
 
-    pub fn write_directory_content(&mut self, original_path: &OsStr, index: &mut usize) {
+    pub fn write_directory_content(
+        &mut self,
+        original_path: &OsStr,
+        directories_read: &mut usize,
+    ) -> std::io::Result<()> {
         let current_dir = self;
         let path = OsString::from(original_path);
-        current_dir.insert_files_and_directories(path.as_os_str(), index);
+        current_dir.insert_files_and_directories(path.as_os_str(), directories_read)?;
+        Ok(())
     }
 
     pub fn find_directory_by_id(&mut self, id_stack: &Vec<usize>) -> &mut Directory {
@@ -81,7 +88,7 @@ impl Directory {
         current_path: &mut OsString,
         directories_read: &mut usize,
         selected_directory_id: usize,
-    ) {
+    ) -> std::io::Result<()> {
         let mut current_dir = self;
         for i in 0..id_stack.len() {
             let result = util::find_directory_index_by_id(&mut current_dir, selected_directory_id);
@@ -90,7 +97,7 @@ impl Directory {
                 current_path.push(current_dir.get_directories()[index].get_name());
 
                 current_dir.get_mut_directories()[index]
-                    .write_directory_content(current_path.as_os_str(), directories_read);
+                    .write_directory_content(current_path.as_os_str(), directories_read)?;
                 break;
             }
 
@@ -100,6 +107,7 @@ impl Directory {
                 current_dir = &mut current_dir.get_mut_directories()[selected];
             }
         }
+        Ok(())
     }
 
     pub fn get_directory_id(&self) -> usize {
@@ -138,20 +146,23 @@ impl Directory {
         &self.metadata
     }
 
-    fn insert_files_and_directories(&mut self, path: &OsStr, index: &mut usize) {
-        match fs::read_dir(path).map_err(|error| {
-            eprintln!("Error occured when reading directories: {}", error);
-        }) {
+    fn insert_files_and_directories(
+        &mut self,
+        path: &OsStr,
+        directories_read: &mut usize,
+    ) -> std::io::Result<()> {
+        match fs::read_dir(path) {
             Ok(entries) => {
                 let mut directories: Vec<Directory> = Vec::new();
                 let mut files: Vec<File> = Vec::new();
 
                 // Insert directories and files to current_dir
-                self.read_entries(entries, &mut directories, &mut files, index);
+                self.read_entries(entries, &mut directories, &mut files, directories_read);
                 self.insert_files(files);
                 self.insert_directories(directories);
+                Ok(())
             }
-            _ => {}
+            Err(error) => Err(error),
         }
     }
 
@@ -174,21 +185,21 @@ impl Directory {
         entries: ReadDir,
         directories: &mut Vec<Directory>,
         files: &mut Vec<File>,
-        index: &mut usize,
+        directories_read: &mut usize,
     ) {
         let list_of_files: Vec<_> = self.get_entries(entries);
         for file in list_of_files {
             if file.file_type.is_dir() {
                 directories.push(Directory {
-                    id: *index,
+                    id: *directories_read,
                     name: file.file_name,
                     directories: Vec::new(),
                     files: Vec::new(),
                     metadata: self.read_metadata_from_file(&file.metadata),
                 });
-                *index += 1;
+                *directories_read += 1;
             } else if file.file_type.is_file() {
-                files.push(File::new_from(
+                files.push(File::build(
                     file.file_name.as_os_str(),
                     self.read_metadata_from_file(&file.metadata),
                 ));
@@ -234,22 +245,25 @@ impl Directory {
     }
 
     fn read_metadata_from_file(&self, metadata: &Metadata) -> FileMetadata {
-        let mut file_metadata = FileMetadata::new();
+        let mut file_metadata_created: Option<DateTime<Local>> = None;
+        let mut file_metadata_modified: Option<DateTime<Local>> = None;
+        let mut file_metadata_accessed: Option<DateTime<Local>> = None;
+
         if let Ok(created) = metadata.created() {
-            file_metadata.created = Some(created.into());
+            file_metadata_created = Some(created.into());
         }
         if let Ok(modified) = metadata.modified() {
-            file_metadata.modified = Some(modified.into());
+            file_metadata_modified = Some(modified.into());
         }
 
         if let Ok(accessed) = metadata.accessed() {
-            file_metadata.accessed = Some(accessed.into());
+            file_metadata_accessed = Some(accessed.into());
         }
 
-        if metadata.permissions().readonly() {
-            file_metadata.permissions = false;
-        }
-
-        file_metadata
+        FileMetadata::build(
+            file_metadata_created,
+            file_metadata_modified,
+            file_metadata_accessed,
+        )
     }
 }

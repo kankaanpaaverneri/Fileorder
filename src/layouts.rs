@@ -39,29 +39,39 @@ pub fn error_layout<'a>(_: &'a App, error_message: &'a str) -> Element<'a, Messa
     container(text(error_message)).center(iced::Fill).into()
 }
 
-pub fn templates_layout<'a>(app: &'a App) -> Element<'a, Message> {
+pub fn file_browser<'a>(app: &'a App) -> Element<'a, Message> {
     container(
         column![
-            text("Select directory to order").size(25).center(),
-            scrollable(get_directory_buttons(app).padding(50)).height(500),
-            button("Home")
-                .on_press(Message::HomeLayout)
-                .style(|theme: &Theme, status| {
-                    // Do stuff
-                    let palette = theme.extended_palette();
-                    match status {
-                        button::Status::Active => {
-                            // Do something
-                            button::Style::default().with_background(palette.secondary.strong.color)
+            column![
+                button("Home")
+                    .on_press(Message::HomeLayout)
+                    .style(|theme: &Theme, status| {
+                        let palette = theme.extended_palette();
+                        match status {
+                            button::Status::Active => button::Style::default()
+                                .with_background(palette.secondary.strong.color),
+                            _ => button::primary(theme, status),
                         }
-                        _ => button::primary(theme, status),
-                    }
-                })
+                    }),
+                text("Select directory to order").size(25).center(),
+                display_external_storage_devices(app),
+                button(text("..").center().size(15)).on_press(Message::Out),
+                error_text(app)
+            ]
+            .padding(10),
+            scrollable(get_directory_buttons(app).padding(25)).height(500),
         ]
         .spacing(10),
     )
     .center(iced::Fill)
     .into()
+}
+
+fn error_text(app: &App) -> Container<Message> {
+    if let Some(error) = app.get_error() {
+        return container(text(error.to_string().clone()));
+    }
+    container(text(""))
 }
 
 fn get_directory_buttons(app: &App) -> Container<Message> {
@@ -71,16 +81,10 @@ fn get_directory_buttons(app: &App) -> Container<Message> {
 
     // Select current directory to display
     root = find_current_directory(&mut position, root);
-    column = column
-        .push(button(text("..").center().size(15)).on_press(Message::Out))
-        .spacing(5);
-    let row = display_external_storage_devices(app);
-    column = column.push(row);
-
     column = display_head(column);
-
     column = display_directories(column, root);
     column = display_files(column, root);
+    column = column.spacing(5);
 
     let container = Container::new(column);
     container
@@ -144,6 +148,7 @@ fn display_external_storage_devices<'a>(app: &'a App) -> Row<'a, Message> {
                 .push(button(name).on_press(Message::InExternal(storage_device.get_directory_id())))
         }
     }
+    row = row.spacing(5);
     row
 }
 

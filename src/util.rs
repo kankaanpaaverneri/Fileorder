@@ -10,10 +10,10 @@ pub fn remove_directory_from_path(path: &OsStr, operating_system: &OperatingSyst
         let splitted: Vec<&str> = str_path.split("/").collect();
         let mut filtered_path = OsString::new();
         for (index, dir_name) in splitted.iter().enumerate() {
-            if index == splitted.len() -1 {
+            if index == splitted.len() - 1 {
                 break;
             }
-            if is_drive_indentifier(&dir_name) {
+            if is_drive_indentifier(&dir_name) || dir_name.is_empty() {
                 if let OperatingSystem::Windows = operating_system {
                     filtered_path.push(dir_name);
                 }
@@ -41,21 +41,21 @@ pub fn find_directory_index_by_id(
     index
 }
 
-pub fn get_external_storage_paths(operating_system: &OperatingSystem) -> Vec<OsString> {
+pub fn get_external_storage_paths(
+    operating_system: &OperatingSystem,
+) -> Result<Vec<OsString>, std::io::Error> {
     let mut storage_paths: Vec<OsString> = Vec::new();
     match operating_system {
-        OperatingSystem::MacOs => get_external_storage_devices_on_macos(&mut storage_paths),
-        OperatingSystem::Windows => get_external_storage_devices_on_windows(&mut storage_paths),
+        OperatingSystem::MacOs => get_external_storage_devices_on_macos(&mut storage_paths)?,
+        OperatingSystem::Windows => get_external_storage_devices_on_windows(&mut storage_paths)?,
         OperatingSystem::Linux => {}
         OperatingSystem::None => {}
     }
-    storage_paths
+    Ok(storage_paths)
 }
 
-fn get_external_storage_devices_on_macos(storage_paths: &mut Vec<OsString>) {
-    let result = fs::read_dir("/Volumes").map_err(|error| {
-        eprintln!("Error when getting external storage devices: {}", error);
-    });
+fn get_external_storage_devices_on_macos(storage_paths: &mut Vec<OsString>) -> std::io::Result<()> {
+    let result = fs::read_dir("/Volumes");
     match result {
         Ok(entries) => {
             let results: Vec<_> = entries.map(|result| result.map(|r| r.path())).collect();
@@ -64,19 +64,25 @@ fn get_external_storage_devices_on_macos(storage_paths: &mut Vec<OsString>) {
                     Ok(path) => {
                         storage_paths.push(OsString::from(path.as_os_str()));
                     }
-                    Err(e) => {
-                        eprintln!("Error occured while reading paths: {}", e)
+                    Err(error) => {
+                        if let std::io::ErrorKind::PermissionDenied = error.kind() {
+                            return Err(error);
+                        }
                     }
                 }
             }
         }
-        _ => {}
+        Err(error) => {
+            return Err(error);
+        }
     }
+    Ok(())
 }
 
-fn get_external_storage_devices_on_windows(storage_paths: &mut Vec<OsString>) {
+fn get_external_storage_devices_on_windows(
+    storage_paths: &mut Vec<OsString>,
+) -> std::io::Result<()> {
     for drive_letter in 'A'..'Z' {
-        
         let read_dir_path = format!("{}:", drive_letter);
         match fs::read_dir(read_dir_path) {
             Ok(_) => {
@@ -84,10 +90,15 @@ fn get_external_storage_devices_on_windows(storage_paths: &mut Vec<OsString>) {
                 path.push(drive_letter.to_string().as_str());
                 path.push(":");
                 storage_paths.push(path);
-            },
-            _ => {}
+            }
+            Err(error) => {
+                if let std::io::ErrorKind::PermissionDenied = error.kind() {
+                    return Err(error);
+                }
+            }
         }
     }
+    Ok(())
 }
 
 fn is_drive_indentifier(directory_name: &str) -> bool {
@@ -110,6 +121,6 @@ fn is_drive_indentifier(directory_name: &str) -> bool {
 fn is_drive_letter(character: &char) -> bool {
     match character {
         'A'..'Z' => true,
-        _ => false
+        _ => false,
     }
 }

@@ -4,10 +4,9 @@ use chrono::{DateTime, Local};
 
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
-    pub created: Option<DateTime<Local>>,
-    pub modified: Option<DateTime<Local>>,
-    pub accessed: Option<DateTime<Local>>,
-    pub permissions: bool,
+    created: Option<DateTime<Local>>,
+    modified: Option<DateTime<Local>>,
+    accessed: Option<DateTime<Local>>,
 }
 
 impl FileMetadata {
@@ -16,7 +15,18 @@ impl FileMetadata {
             created: None,
             modified: None,
             accessed: None,
-            permissions: true,
+        }
+    }
+
+    pub fn build(
+        created: Option<DateTime<Local>>,
+        modified: Option<DateTime<Local>>,
+        accessed: Option<DateTime<Local>>,
+    ) -> Self {
+        Self {
+            created,
+            modified,
+            accessed,
         }
     }
     pub fn get_created(&self) -> Option<DateTime<Local>> {
@@ -39,7 +49,7 @@ pub struct File {
 }
 
 impl File {
-    pub fn new_from(name: &OsStr, metadata: FileMetadata) -> Self {
+    pub fn build(name: &OsStr, metadata: FileMetadata) -> Self {
         Self {
             name: OsString::from(name),
             metadata,
